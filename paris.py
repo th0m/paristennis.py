@@ -1,6 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 import bs4 as BeautifulSoup
 import requests
+import grequests
+from datetime import datetime
+from datetime import timedelta
 
 def login(s, login, password):
     s.get('https://teleservices.paris.fr/srtm/jsp/web/index.jsp')
@@ -33,16 +36,30 @@ def crawl(s, tousArrondissements, courtCouvert):
     if courtCouvert:
         data['courtCouvert'] = 'on'
 
-    data['dateDispo'] = '09/12/2014'
-    for heureDispo in range(8, 22):
-        data['heureDispo'] = heureDispo
-        r = s.post('https://teleservices.paris.fr/srtm/reservationCreneauListe.action', data=data)
-        soup = BeautifulSoup.BeautifulSoup(r.text)
-        pagelinks = soup.find(attrs={'class': 'pagelinks'}).findAll('a')
-        if len(pagelinks) > 0:
-            print(data['dateDispo']+' at '+str(heureDispo)+' '+pagelinks[-1]['href'].split('d-41734-p=')[1].split('&')[0])
-        else:
-            print(data['dateDispo']+' at '+str(heureDispo)+' 1')
+    date = datetime.now()
+    for i in range(1,8):
+        data['dateDispo'] = '{:%d/%m/%Y}'.format(date)
+        rs = []
+        for heureDispo in range(8, 22):
+            data['heureDispo'] = heureDispo
+            r = s.post('https://teleservices.paris.fr/srtm/reservationCreneauListe.action', data=data)
+            soup = BeautifulSoup.BeautifulSoup(r.text)
+            pagelinks = soup.find(attrs={'class': 'pagelinks'})
+            pages = 0
+            if pagelinks:
+                links = pagelinks.findAll('a')
+                if len(links) > 0:
+                    pages = int(links[-1]['href'].split('d-41734-p=')[1].split('&')[0])
+                else:
+                    pages = 1
+            for page in range(0, pages):
+                data['d-41734-p'] = page
+                rs.append(grequests.post('https://teleservices.paris.fr/srtm/reservationCreneauListe.action', data=data, session=s))
+
+        print(data['dateDispo'])
+        print(grequests.map(rs))
+        date = date + timedelta(days=1)
+
 
 def main():
     s = requests.Session()
