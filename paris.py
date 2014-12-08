@@ -2,6 +2,7 @@
 import bs4 as BeautifulSoup
 import requests
 import grequests
+import redis
 from datetime import datetime
 from datetime import timedelta
 
@@ -36,16 +37,24 @@ def crawl(s, tousArrondissements, courtCouvert):
     if courtCouvert:
         data['courtCouvert'] = 'on'
 
+    url = 'https://teleservices.paris.fr/srtm/reservationCreneauListe.action'
     date = datetime.now()
-    for i in range(1,8):
+
+    for i in range(1,3):
+    #for i in range(1,8):
+        date = date + timedelta(days=1)
         data['dateDispo'] = '{:%d/%m/%Y}'.format(date)
-        rs = []
-        for heureDispo in range(8, 22):
+        results = {}
+
+        for heureDispo in range(20, 22):
+        #for heureDispo in range(8, 22):
             data['heureDispo'] = heureDispo
-            r = s.post('https://teleservices.paris.fr/srtm/reservationCreneauListe.action', data=data)
+            r = s.post(url, data=data)
             soup = BeautifulSoup.BeautifulSoup(r.text)
             pagelinks = soup.find(attrs={'class': 'pagelinks'})
             pages = 0
+            key = data['dateDispo']+':'+str(heureDispo)
+            results[key] = []
             if pagelinks:
                 links = pagelinks.findAll('a')
                 if len(links) > 0:
@@ -54,11 +63,18 @@ def crawl(s, tousArrondissements, courtCouvert):
                     pages = 1
             for page in range(0, pages):
                 data['d-41734-p'] = page
-                rs.append(grequests.post('https://teleservices.paris.fr/srtm/reservationCreneauListe.action', data=data, session=s))
+                results[key].append(grequests.post(url, data=data, session=s))
 
-        print(data['dateDispo'])
-        print(grequests.map(rs))
-        date = date + timedelta(days=1)
+            print(key)
+            print(grequests.map(results[key]))
+
+        #date = date + timedelta(days=1)
+    return results
+
+def saveResults(results):
+    r = redis.redis('localhost')
+    for k,v in results:
+        print(k)
 
 
 def main():
@@ -66,6 +82,7 @@ def main():
     login(s, '171091026', '5434')
     #getInfos(s)
     #getTennisList(s)
-    crawl(s, True, False)
+    results = crawl(s, True, False)
+    saveResults(results)
 
 main()
