@@ -11,9 +11,6 @@ def login(s, login, password):
     data = {'login': login, 'password': password}
     s.post('https://teleservices.paris.fr/srtm/authentificationConnexion.action', data=data)
 
-def getInfos(s):
-    r = s.get('https://teleservices.paris.fr/srtm/compteConsulterDonneePersoInit.action')
-
 def getTennisList(s):
     r = s.get('https://teleservices.paris.fr/srtm/reservationCreneauInit.action')
     soup = BeautifulSoup.BeautifulSoup(r.text)
@@ -39,22 +36,22 @@ def crawl(s, tousArrondissements, courtCouvert):
 
     url = 'https://teleservices.paris.fr/srtm/reservationCreneauListe.action'
     date = datetime.now()
+    results = []
 
-    for i in range(1,3):
-    #for i in range(1,8):
-        date = date + timedelta(days=1)
+    #for i in range(1,3):
+    for i in range(1,8):
+        #date = date + timedelta(days=1)
         data['dateDispo'] = '{:%d/%m/%Y}'.format(date)
-        results = {}
+        reqs = []
 
-        for heureDispo in range(20, 22):
-        #for heureDispo in range(8, 22):
+        #for heureDispo in range(20, 22):
+        for heureDispo in range(8, 22):
             data['heureDispo'] = heureDispo
             r = s.post(url, data=data)
             soup = BeautifulSoup.BeautifulSoup(r.text)
             pagelinks = soup.find(attrs={'class': 'pagelinks'})
             pages = 0
             key = data['dateDispo']+':'+str(heureDispo)
-            results[key] = []
             if pagelinks:
                 links = pagelinks.findAll('a')
                 if len(links) > 0:
@@ -63,19 +60,28 @@ def crawl(s, tousArrondissements, courtCouvert):
                     pages = 1
             for page in range(0, pages):
                 data['d-41734-p'] = page
-                results[key].append(grequests.post(url, data=data, session=s))
+                reqs.append(grequests.post(url, data=data, session=s))
 
-            print(key)
-            print(grequests.map(results[key]))
-
-        #date = date + timedelta(days=1)
+        results.extend(grequests.map(reqs))
+        date = date + timedelta(days=1)
     return results
 
 def saveResults(results):
-    r = redis.redis('localhost')
-    for k,v in results:
-        print(k)
-
+    i = 0
+    r = redis.Redis('localhost')
+    for page in results:
+        soup = BeautifulSoup.BeautifulSoup(page.content)
+        tbody = soup.tbody
+        if tbody:
+            for row in tbody.findAll('tr'):
+                cells = row.findAll('td')
+                r.hset(cells[0].string, 'arrdt', cells[1].string)
+                r.hset(cells[0].string, 'date', cells[2].string)
+                r.hset(cells[0].string, 'hour', cells[3].string)
+                r.hset(cells[0].string, 'court', cells[4].string)
+                r.hset(cells[0].string, 'info', cells[5].string)
+                r.hset(cells[0].string, 'book', cells[6].string)
+                #r.expire(cells[0].string, 600)
 
 def main():
     s = requests.Session()
