@@ -48,7 +48,7 @@ def crawl(s, tousArrondissements, courtCouvert):
         print(data['dateDispo'])
         reqs = []
 
-        for heureDispo in range(8, 22):
+        for heureDispo in range(startHour, endHour):
             data['heureDispo'] = heureDispo
             r = s.post(url, data=data)
             soup = BeautifulSoup.BeautifulSoup(r.text)
@@ -89,11 +89,13 @@ def saveResults(results):
                 })
 
 def main():
+    # soir
     s = requests.Session()
     login(s, '171091026', '5434')
     #login(s, '020689053', '7498')
     #getInfos(s)
     #getTennisList(s)
+    
     results = crawl(s, True, False)
     saveResults(results)
 
