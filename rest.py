@@ -10,14 +10,15 @@ import uuid
 
 app = Flask(__name__)
 
-@app.route('/api/alerts', methods=['GET'])
+@app.route('/api/alert', methods=['GET'])
 def getAlerts():
     key = request.headers.get('key')
     if key is None:
         abort(400)
-    return jsonify({'key': key})
+    alerts = list(db.alerts.find({'key': key},{'_id': 0}))
+    return jsonify(results = alerts)
 
-@app.route('/api/alerts', methods=['POST'])
+@app.route('/api/alert', methods=['POST'])
 def postAlerts():
     key = request.headers.get('key')
 
@@ -66,7 +67,7 @@ def postAlerts():
     db.alerts.insert(alert) 
     return jsonify({'alertName': alertName}), 201
     
-@app.route('/api/users', methods=['POST'])
+@app.route('/api/user', methods=['POST'])
 def new_user():
     login = request.json.get('login')
     password = request.json.get('password')
@@ -83,7 +84,7 @@ def new_user():
     db.users.insert(user)
     return jsonify({ 'key': key }), 201
 
-@app.route('/api/users', methods=['GET'])
+@app.route('/api/user', methods=['GET'])
 def get_user():
     key = request.headers.get('key')
     if key is None:
