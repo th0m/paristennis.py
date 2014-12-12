@@ -56,7 +56,7 @@ def postAlerts():
             alert['arrdt2'] = arrdt2
             alert['arrdt3'] = arrdt3
     else:
-        alert['allArrdt'] = True
+        alert['allArrdt'] = allArrdt
 
     if startHour is None or endHour is None:
         abort(400)
@@ -69,17 +69,15 @@ def postAlerts():
     
 @app.route('/api/user', methods=['POST'])
 def new_user():
-    login = request.json.get('login')
-    password = request.json.get('password')
-    if login is None or password is None:
+    mail = request.json.get('mail')
+    if mail is None:
         abort(400)
 
     key = str(uuid.uuid4())
 
     user = {
         'key': key,
-        'login': login,
-        'password': password
+        'mail': mail
     }
     db.users.insert(user)
     return jsonify({ 'key': key }), 201

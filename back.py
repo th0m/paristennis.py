@@ -2,13 +2,13 @@
 import bs4 as BeautifulSoup
 import requests
 import grequests
-import redis
 import time
 import uuid
+from pymongo import MongoClient
 from datetime import datetime
 from datetime import timedelta
 
-def login(s, login, password):
+def login(login, password):
     s.get('https://teleservices.paris.fr/srtm/jsp/web/index.jsp')
     data = {'login': login, 'password': password}
     s.post('https://teleservices.paris.fr/srtm/authentificationConnexion.action', data=data)
@@ -24,22 +24,23 @@ def getTennisList(s):
             tlist.append({'name': split[0], 'arrdt': split[1]})
     return tlist
 
-def crawl(s, tousArrondissements, courtCouvert):
+def crawl(alert):
     data = {
         'actionInterne': 'recherche',
         'provenanceCriteres': 'true',
     }
 
-    if tousArrondissements:
+    if alert['allArrdt']:
         data['tousArrondissements'] = 'on'
 
-    if courtCouvert:
+    if alert['coveredCourt']:
         data['courtCouvert'] = 'on'
 
     date = datetime.now()
     results = []
     # If we already booked a tennis court getting the list will fail if we don't first do that request
     r = s.get('https://teleservices.paris.fr/srtm/reservationCreneauInit.action')
+    print(r.text)
 
     url = 'https://teleservices.paris.fr/srtm/reservationCreneauListe.action'
 
@@ -48,7 +49,7 @@ def crawl(s, tousArrondissements, courtCouvert):
         print(data['dateDispo'])
         reqs = []
 
-        for heureDispo in range(startHour, endHour):
+        for heureDispo in range(alert['startHour'], alert['endHour']):
             data['heureDispo'] = heureDispo
             r = s.post(url, data=data)
             soup = BeautifulSoup.BeautifulSoup(r.text)
@@ -68,35 +69,17 @@ def crawl(s, tousArrondissements, courtCouvert):
         date = date + timedelta(days=1)
     return results
 
-def saveResults(results):
-    r = redis.Redis('localhost')
-    for page in results:
-        soup = BeautifulSoup.BeautifulSoup(page.content)
-        tbody = soup.tbody
-        if tbody:
-            for row in tbody.findAll('tr'):
-                cells = row.findAll('td')
-                key = uuid.uuid4()
-                # a : arrdt, d : date, h : hour, c : court, i : info, b : book
-                r.lpush(cells[0].string, uuid) 
-                r.hmset(key, {
-                    'a': cells[1].string,
-                    'd': cells[2].string,
-                    'h': cells[3].string,
-                    'c': cells[4].string,
-                    'i': cells[5].string,
-                    'b': cells[6].string
-                })
+def checkAlerts():
+    for i in db.alerts.find():
+        crawl(i)
 
-def main():
-    # soir
+
+if __name__ == '__main__':
+    db = MongoClient().tennis
     s = requests.Session()
-    login(s, '171091026', '5434')
+    login('171091026', '5434')
     #login(s, '020689053', '7498')
     #getInfos(s)
     #getTennisList(s)
-    
-    results = crawl(s, True, False)
-    saveResults(results)
-
-main()
+    #results = crawl(s, True, False)
+    print(checkAlerts())
