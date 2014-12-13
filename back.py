@@ -1,56 +1,62 @@
 #!/usr/bin/env python2
 import bs4 as BeautifulSoup
 import requests
-import grequests
 import smtplib
+import redis
+import hashlib
+import json
+from jinja2 import Environment, FileSystemLoader
 from email.mime.text import MIMEText
 from pymongo import MongoClient
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 def login(login, password):
     s.get('https://teleservices.paris.fr/srtm/jsp/web/index.jsp')
     data = {'login': login, 'password': password}
     s.post('https://teleservices.paris.fr/srtm/authentificationConnexion.action', data=data)
 
-def getTennisList(s):
-    r = s.get('https://teleservices.paris.fr/srtm/reservationCreneauInit.action')
-    soup = BeautifulSoup.BeautifulSoup(r.text)
-    tennis = soup.find(attrs={'name': 'tennisArrond'})
-    tlist = []
-    for tennis in tennis.findAll('option'):
-        split = tennis['value'].split('@',1) 
-        if len(split) == 2:
-            tlist.append({'name': split[0], 'arrdt': split[1]})
-    return tlist
+def get_req_checksum(post_data):
+    return hashlib.md5(json.dumps(post_data, sort_keys=True)).hexdigest()
+
+def get_resp_cache(url, post_data=False):
+    if not post_data:
+        reqchksum = hashlib.md5(url).hexdigest()
+    else:
+        reqchksum = get_req_checksum(post_data)
+    resp = rdb.get(reqchksum)
+    if not resp:
+        if not post_data:
+            resp = s.get(url).text
+        else:
+            resp = s.post(url, data=post_data).text
+        rdb.setex(reqchksum, resp, 60)
+    return resp
 
 def crawl(alert):
-    data = {
+    post_data = {
         'actionInterne': 'recherche',
         'provenanceCriteres': 'true',
     }
 
     if alert['allArrdt']:
-        data['tousArrondissements'] = 'on'
+        post_data['tousArrondissements'] = 'on'
 
     if alert['coveredCourt']:
-        data['courtCouvert'] = 'on'
+        post_data['courtCouvert'] = 'on'
 
     date = datetime.now()
     results = []
     # If we already booked a tennis court getting the list will fail if we don't first do that request
-    r = s.get('https://teleservices.paris.fr/srtm/reservationCreneauInit.action')
+    get_resp_cache('https://teleservices.paris.fr/srtm/reservationCreneauInit.action')
     url = 'https://teleservices.paris.fr/srtm/reservationCreneauListe.action'
 
     for i in range(1,8):
-        data['dateDispo'] = '{:%d/%m/%Y}'.format(date)
-        print(data['dateDispo'])
-        reqs = []
+        post_data['dateDispo'] = '{:%d/%m/%Y}'.format(date)
 
         for heureDispo in range(alert['startHour'], alert['endHour']+1):
-            data['heureDispo'] = heureDispo
-            r = s.post(url, data=data)
-            soup = BeautifulSoup.BeautifulSoup(r.text)
+            post_data['heureDispo'] = heureDispo
+            resp = get_resp_cache(url, post_data)
+            soup = BeautifulSoup.BeautifulSoup(resp)
             pagelinks = soup.find(attrs={'class': 'pagelinks'})
             pages = 0 
             if pagelinks:
@@ -60,15 +66,14 @@ def crawl(alert):
                 else:
                     pages = 1
             for page in range(1, pages+1):
-                data['d-41734-p'] = page
-                reqs.append(grequests.post(url, data=data, session=s))
-
-        results.extend(grequests.map(reqs))
+                post_data['d-41734-p'] = page
+                resp = get_resp_cache(url, post_data)
+                results.append(resp)
         date = date + timedelta(days=1)
 
     content = {}
     for page in results:
-        soup = BeautifulSoup.BeautifulSoup(page.content)
+        soup = BeautifulSoup.BeautifulSoup(page)
         tbody = soup.tbody
         if tbody:
             for row in tbody.findAll('tr'):
@@ -87,23 +92,34 @@ def crawl(alert):
 
     return content
 
-def sendMail(mail, content):
-    return
+def sendMail(mail, alertName, content):
+    env = Environment(loader=FileSystemLoader('templates'))
+    template = env.get_template('mail.html')
+    output = template.render(content=content)
+    msg = MIMEText(output, 'html', 'utf-8')
+    me = 'me@thomaslefebv.re'
+    msg['Subject'] = 'Alert for %s' % alertName
+    msg['From'] = me
+    msg['To'] = mail
+    s = smtplib.SMTP('localhost')
+    s.sendmail(me, mail, msg.as_string())
+    s.quit()
 
-def checkAlerts():
+def check_alerts():
     for user in db.users.find():
         mail = user['mail']
         for alert in db.alerts.find({'key': user['key']}):
-            name = alert['alertName']
+            alertName = alert['alertName']
             content = crawl(alert)
-            sendMail(mail, content)
+            r_chksum = rdb.get(alert['_id'])
+            chksum = hashlib.md5(json.dumps(content, sort_keys=True)).hexdigest() 
+            if r_chksum != chksum:
+                rdb.set(alert['_id'], chksum)
+                sendMail(mail, alertName, content)
 
 if __name__ == '__main__':
     db = MongoClient().tennis
+    rdb = redis.Redis('localhost')
     s = requests.Session()
     login('171091026', '5434')
-    #login(s, '020689053', '7498')
-    #getInfos(s)
-    #getTennisList(s)
-    #results = crawl(s, True, False)
-    checkAlerts()
+    check_alerts()

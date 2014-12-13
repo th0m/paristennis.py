@@ -1,15 +1,17 @@
+<h1>New tennis courts available !</h1>
 {% for date, hours in content.iteritems() %}
-<h1>{{ date }}</h1>
+<h2>{{ date }}</h2>
 {% for hour, bookings in hours.iteritems() %}
-<h2>{{ hour }}</h2>
 <table>
 <tr>
+<th>Hour</th>
 <th>Arrondissement</th>
 <th>Tennis</th>
 <th>Court</th>
 </tr>
 {% for booking in bookings %}
 <tr>
+<td>{{ hour }}</td>
 <td>{{ booking.arrdt }}</td>
 <td>{{ booking.tennis }}</td>
 <td>{{ booking.court }}</td>

@@ -4,7 +4,6 @@ from flask import Flask
 from flask import jsonify
 from flask import request
 from flask import abort
-from flask import url_for
 from pymongo import MongoClient
 import uuid
 
