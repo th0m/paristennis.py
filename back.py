@@ -1,10 +1,12 @@
 #!/usr/bin/env python2
 import bs4 as BeautifulSoup
 import requests
+import logging
 import smtplib
 import redis
 import hashlib
 import json
+import time
 from jinja2 import Environment, FileSystemLoader
 from email.mime.text import MIMEText
 from pymongo import MongoClient
@@ -93,7 +95,7 @@ def crawl(alert):
     return content
 
 def sendMail(mail, alertName, content):
-    env = Environment(loader=FileSystemLoader('templates'))
+    env = Environment(loader=FileSystemLoader('/home/tennis/templates'))
     template = env.get_template('mail.html')
     output = template.render(content=content)
     msg = MIMEText(output, 'html', 'utf-8')
@@ -122,4 +124,9 @@ if __name__ == '__main__':
     rdb = redis.Redis('localhost')
     s = requests.Session()
     login('171091026', '5434')
-    check_alerts()
+    logging.basicConfig(format='%(asctime)s %(message)s', level=logging.DEBUG)
+    while True:
+        logging.info('check_alerts() started')
+        check_alerts()
+        logging.info('check_alerts() ended')
+        time.sleep(60)
