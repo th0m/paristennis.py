@@ -7,6 +7,7 @@ import redis
 import hashlib
 import json
 import time
+import yaml
 from jinja2 import Environment, FileSystemLoader
 from email.mime.text import MIMEText
 from pymongo import MongoClient
@@ -82,8 +83,10 @@ def crawl(alert):
                 cells = row.findAll('td')
                 date = cells[2].string
                 hour = cells[3].string
-                content[date] = {}
-                content[date][hour] = []
+                if not date in content:
+                    content[date] = {}
+                if not hour in content[date]:
+                    content[date][hour] = []
                 content[date][hour].append({
                     'tennis': cells[0].string,
                     'arrdt': cells[1].string,
@@ -94,12 +97,12 @@ def crawl(alert):
 
     return content
 
-def sendMail(mail, alertName, content):
+def send_mail(mail, alertName, content):
     env = Environment(loader=FileSystemLoader('/home/tennis/templates'))
     template = env.get_template('mail.html')
     output = template.render(content=content)
     msg = MIMEText(output, 'html', 'utf-8')
-    me = 'me@thomaslefebv.re'
+    me = sender
     msg['Subject'] = 'Alert for %s' % alertName
     msg['From'] = me
     msg['To'] = mail
@@ -117,16 +120,21 @@ def check_alerts():
             chksum = hashlib.md5(json.dumps(content, sort_keys=True)).hexdigest() 
             if r_chksum != chksum:
                 rdb.set(alert['_id'], chksum)
-                sendMail(mail, alertName, content)
+                send_mail(mail, alertName, content)
 
 if __name__ == '__main__':
     db = MongoClient().tennis
     rdb = redis.Redis('localhost')
     s = requests.Session()
-    login('171091026', '5434')
-    logging.basicConfig(format='%(asctime)s %(message)s', level=logging.DEBUG)
+    conf = yaml.load(open('conf/config.yaml', 'r'))
+    sender = conf['sender']
+    login = conf['login']
+    password = conf ['password']
+    
+    logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
     while True:
         logging.info('check_alerts() started')
+        login(login, password)
         check_alerts()
         logging.info('check_alerts() ended')
         time.sleep(60)
