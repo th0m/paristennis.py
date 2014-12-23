@@ -7,6 +7,6 @@ redis-server > /home/tennis/log/redis.log &
 echo Start Postfix
 postfix start 
 echo Start Rest
-/home/tennis/rest.py > /home/tennis/log/rest.log &
+/home/tennis/rest.py > /home/tennis/log/rest.log 2>&1 &
 echo Start Back
-/home/tennis/back.py > /home/tennis/log/back.log
+/home/tennis/back.py > /home/tennis/log/back.log 2>&1
