@@ -13,7 +13,7 @@ from email.mime.text import MIMEText
 from pymongo import MongoClient
 from datetime import datetime, timedelta
 
-def login(login, password):
+def connect(login, password):
     s.get('https://teleservices.paris.fr/srtm/jsp/web/index.jsp')
     data = {'login': login, 'password': password}
     s.post('https://teleservices.paris.fr/srtm/authentificationConnexion.action', data=data)
@@ -134,7 +134,7 @@ if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
     while True:
         logging.info('check_alerts() started')
-        login(login, password)
+        connect(login, password)
         check_alerts()
         logging.info('check_alerts() ended')
         time.sleep(60)
