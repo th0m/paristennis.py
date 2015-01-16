@@ -126,7 +126,7 @@ if __name__ == '__main__':
     db = MongoClient().tennis
     rdb = redis.Redis('localhost')
     s = requests.Session()
-    conf = yaml.load(open('conf/config.yaml', 'r'))
+    conf = yaml.load(open('/home/tennis/conf/conf.yaml', 'r'))
     sender = conf['sender']
     login = conf['login']
     password = conf ['password']
