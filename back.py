@@ -35,6 +35,26 @@ def get_resp_cache(url, post_data=False):
         rdb.setex(reqchksum, resp, 60)
     return resp
 
+def get_results(alert, results, post_data):
+    url = 'https://teleservices.paris.fr/srtm/reservationCreneauListe.action'
+    for heureDispo in range(int(alert['startHour']), int(alert['endHour'])+1):
+        post_data['heureDispo'] = heureDispo
+        resp = get_resp_cache(url, post_data)
+        soup = BeautifulSoup.BeautifulSoup(resp)
+        pagelinks = soup.find(attrs={'class': 'pagelinks'})
+        pages = 0 
+        if pagelinks:
+            links = pagelinks.findAll('a')
+            if len(links) > 0:
+                pages = int(links[-1]['href'].split('d-41734-p=')[1].split('&')[0])
+            else:
+                pages = 1
+        for page in range(1, pages+1):
+            post_data['d-41734-p'] = page
+            resp = get_resp_cache(url, post_data)
+            results.append(resp)
+    return results
+
 def crawl(alert):
     post_data = {
         'actionInterne': 'recherche',
@@ -47,32 +67,22 @@ def crawl(alert):
     if alert['coveredCourt']:
         post_data['courtCouvert'] = 'on'
 
+    if 'dateDispo' in alert.keys():
+        post_data['dateDispo'] = alert['dateDispo']
+
     date = datetime.now()
     results = []
+
     # If we already booked a tennis court getting the list will fail if we don't first do that request
     get_resp_cache('https://teleservices.paris.fr/srtm/reservationCreneauInit.action')
-    url = 'https://teleservices.paris.fr/srtm/reservationCreneauListe.action'
 
-    for i in range(1,8):
-        post_data['dateDispo'] = '{:%d/%m/%Y}'.format(date)
-
-        for heureDispo in range(alert['startHour'], alert['endHour']+1):
-            post_data['heureDispo'] = heureDispo
-            resp = get_resp_cache(url, post_data)
-            soup = BeautifulSoup.BeautifulSoup(resp)
-            pagelinks = soup.find(attrs={'class': 'pagelinks'})
-            pages = 0 
-            if pagelinks:
-                links = pagelinks.findAll('a')
-                if len(links) > 0:
-                    pages = int(links[-1]['href'].split('d-41734-p=')[1].split('&')[0])
-                else:
-                    pages = 1
-            for page in range(1, pages+1):
-                post_data['d-41734-p'] = page
-                resp = get_resp_cache(url, post_data)
-                results.append(resp)
-        date = date + timedelta(days=1)
+    if 'dateDispo' in alert.keys():
+        get_results(alert, results, post_data)
+    else:
+        for i in range(1,8):
+            post_data['dateDispo'] = '{:%d/%m/%Y}'.format(date)
+            get_results(alert, results, post_data)
+            date = date + timedelta(days=1)
 
     content = {}
     for page in results:
